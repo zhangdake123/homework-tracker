@@ -1,0 +1,20 @@
+# Render 蓝图：在 Render 里选 "New > Blueprint" 并连接本仓库，会自动读取这个文件。
+# ⚠️ 免费实例的文件系统是临时的，服务重启 / 重新部署都会清空 data/ 目录（作业记录会丢）。
+#    要长期使用：付费计划挂持久盘后，打开下面的 DB_PATH 环境变量，把它指向盘内路径。
+services:
+  - type: web
+    name: homework-tracker
+    runtime: node
+    plan: free
+    autoDeploy: true
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 24.15.0
+      - key: HOST
+        value: 0.0.0.0
+      # 付费计划挂上持久盘（例如挂载到 /var/data）后打开这两行：
+      # - key: DB_PATH
+      #   value: /var/data/tracker.db

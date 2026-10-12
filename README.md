@@ -15,7 +15,9 @@
 | 前端 | 原生 HTML / CSS / JavaScript（响应式） | 手机竖屏优先，电脑端双列看板 |
 | 同步 | Server-Sent Events（SSE）+ 15 秒轮询兜底 | 手机改完，电脑端几秒内自动刷新 |
 
-前提：**Node.js ≥ 22.5**（本机实测 v24.15.0）。`node --version` 可以查看。
+前提：**Node.js ≥ 22.13**（或 ≥ 23.4；本机实测 v24.15.0）。`node --version` 可以查看。
+
+> `node:sqlite` 在 Node 22.5–22.12 里需要加 `--experimental-sqlite` 标志才能用，22.13 起才默认可用；云端部署请锁版本（本仓库已带 `.node-version`，内容为 `24.15.0`）。
 
 ### 目录结构
 
@@ -28,6 +30,8 @@ public/styles.css         响应式样式
 public/app.js             前端逻辑（登记 / 标记 / 看板 / 详情 / 名单 / 同步）
 scripts/seed-demo.js      生成演示数据（3 本作业册、3 个课次、38 名虚拟学生）
 tests/scenarios.test.js   自动化测试（60 项断言，覆盖全部验收场景）
+render.yaml                Render 蓝图（免费云平台一键部署用，可选）
+.node-version              锁定的 Node 版本（云端平台会自动读取）
 data/tracker.db           SQLite 数据库文件（首次启动自动创建）
 ```
 
@@ -82,6 +86,8 @@ node scripts/seed-demo.js --reset    # 先清空任务再生成演示数据
 
 ## 四、如何部署（两台设备共享同一份数据）
 
+先选路子：**A** 教室电脑常开（最省事，数据最安全）｜**B** 自有云服务器｜**D** GitHub 登录的免费云平台（手机在 4G 下也能用，但注意数据持久化，见下）。
+
 **方案 A：一台电脑常开（最简单，推荐教室使用）**
 
 - 把项目放到教室电脑（或一台常年开机的电脑），开机时运行 `node server.js`，手机连同一 Wi-Fi 访问上面的局域网地址。
@@ -116,6 +122,22 @@ WantedBy=multi-user.target
 
 **方案 C：已有服务器/内网穿透**：把 `node server.js` 挂在你熟悉的方式（pm2、screen、Docker）后面即可，唯一要求是手机和电脑都能访问同一个地址。
 
+**方案 D：部署到 GitHub 登录的免费云平台（Render / Railway / Koyeb / Zeabur 等）**
+
+以 **Render** 为例（免费、支持 GitHub 登录）：
+
+1. 在 Render 里 **New → Blueprint**（或 **New → Web Service**），用 GitHub 登录后选仓库 `homework-tracker`。
+2. Render 会自动读取仓库里的 `render.yaml`；手动配置时填：Runtime = **Node**，Build Command = `npm install`，Start Command = `node server.js`，Plan = **Free**。
+3. 环境变量：`NODE_VERSION=24.15.0`、`HOST=0.0.0.0`。端口不用填，Render 会自动注入 `PORT`（代码已读取）。
+4. 部署完成后拿到一个 `https://xxx.onrender.com` 地址，手机和电脑都打开它即可，数据是同一份。
+
+⚠️ **必须先知道的两件事**
+
+- **免费实例的磁盘是临时的**：重新部署、服务重启（免费实例闲置 15 分钟会被回收，下次访问冷启动约 50 秒）都会清空 `data/`，作业记录会丢。要长期用，必须：给实例挂**持久盘**（多数平台需要付费计划）并把 `DB_PATH` 指向盘内路径（例如 `DB_PATH=/var/data/tracker.db`），或者改用方案 A/B。
+- 部署前请把 Node 版本提到 **22.13+**（`render.yaml` 里已写 `NODE_VERSION=24.15.0`），否则启动会报 `ERR_UNKNOWN_BUILTIN_MODULE: node:sqlite`。
+
+重启后想恢复演示数据：在平台的控制台里跑 `npm run seed:demo`；恢复自己的数据见第五节。
+
 ---
 
 ## 五、数据保存在哪里、如何备份
@@ -132,6 +154,7 @@ Copy-Item .\data\tracker.db* "D:\backup\hw-$(Get-Date -Format yyyyMMdd-HHmm)\" -
 - 恢复：把备份文件复制回 `data/` 覆盖，再启动服务。
 - 也可以用 SQLite 在线备份：`node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync('data/tracker.db').exec(\"VACUUM INTO 'data/backup.db'\")"`。
 - 数据全部在服务器上，**不在浏览器 localStorage 里**；手机和电脑只是显示同一份数据，清空浏览器缓存不会丢数据。
+- ⚠️ **免费云平台的磁盘是临时的**：实例重启或重新部署会清空 `data/`，所以免费平台只适合试用。要长期保存，请挂持久盘（并设置 `DB_PATH`）、换成自有服务器（方案 B），或直接用教室电脑（方案 A）+ 定期备份。
 
 ---
 
@@ -250,3 +273,6 @@ node tests/scenarios.test.js
 - **电脑重启后要重新运行**：按“方案 A”做开机自启，或部署到云服务器。
 - **想换到别的电脑**：复制整个项目目录（含 `data/`）即可，数据跟着走。
 - **误操作**：屏幕提示条上的「撤销」，或在任务详情里手动改回；所有变化都有历史记录可追溯。
+- **部署到免费平台后数据没了**：免费实例磁盘是临时的，重启即清空。处理方式见第四节方案 D 和第五节。
+- **云端启动报 `ERR_UNKNOWN_BUILTIN_MODULE: node:sqlite`**：Node 版本低于 22.13，升到 22.13+/23.4+ 即可（本仓库 `.node-version` 已写 24.15.0）。
+- **云端线上地址打不开 / 首次访问很慢**：免费实例休眠后需要冷启动，等 30–60 秒再刷新。
