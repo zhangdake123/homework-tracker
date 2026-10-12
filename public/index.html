@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#1f6feb" />
+<title>班主任作业追踪</title>
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">作</span>
+    <span class="brand-text">班主任作业追踪</span>
+  </div>
+  <div class="top-actions">
+    <span id="syncState" class="sync" title="手机与电脑通过服务器同步">连接中…</span>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab" data-view="register" type="button">作业登记</button>
+  <button class="tab" data-view="board" type="button">待办看板</button>
+  <button class="tab" data-view="roster" type="button">名单 / 设置</button>
+</nav>
+
+<main id="main">
+  <section class="view" id="view-register">
+    <div class="card">
+      <h2>新建作业任务</h2>
+      <div class="field">
+        <label for="bookInput">作业册</label>
+        <input id="bookInput" class="input" type="text" list="bookList" autocomplete="off" placeholder="直接输入，例如 A册" />
+        <datalist id="bookList"></datalist>
+      </div>
+      <div class="field">
+        <label for="lessonInput">课次</label>
+        <input id="lessonInput" class="input" type="text" list="lessonList" autocomplete="off" placeholder="直接输入，例如 第3课" />
+        <datalist id="lessonList"></datalist>
+      </div>
+      <div class="field">
+        <label for="contentInput">作业内容</label>
+        <input id="contentInput" class="input" type="text" list="contentList" autocomplete="off" placeholder="直接输入，例如 抄写" />
+        <datalist id="contentList"></datalist>
+        <p class="hint">三项都直接手输；以前用过的名称会变成下拉建议，点一下即可复用。</p>
+      </div>
+      <div class="field">
+        <label for="taskDate">创建日期</label>
+        <input id="taskDate" class="input" type="date" />
+      </div>
+      <div class="field">
+        <label>创建时全班初始状态</label>
+        <div class="chips" id="initStatusChips"></div>
+        <p class="hint">推荐“待批改”：收到全班作业但还没批改时先建任务，批改时再逐个标记。也可以选“待订正”。</p>
+      </div>
+      <p class="preview">任务标题预览：<strong id="titlePreview">—</strong></p>
+      <button id="btnCreateTask" class="btn primary big" type="button">创建任务（自动生成全班学号）</button>
+      <p class="hint" id="createHint"></p>
+    </div>
+
+    <div class="card" id="markPanel" hidden>
+      <div class="row between">
+        <h2 id="markTitle">—</h2>
+        <button id="btnMarkClose" class="btn small ghost" type="button">收起</button>
+      </div>
+      <p class="hint" id="markMeta"></p>
+      <div class="legend" id="markLegend"></div>
+      <div class="mark-toolbar">
+        <label class="switch"><input type="checkbox" id="stampMode" /> 印章模式（点一下直接标记）</label>
+        <button id="btnSelectAll" class="btn small" type="button">全选</button>
+        <button id="btnClearSel" class="btn small" type="button">清空选择</button>
+        <span class="sel-count" id="selCount">已选 0 人</span>
+      </div>
+      <div class="grid-legend">
+        <span class="mini s-done">✓ 已完成</span>
+        <span class="mini s-not_received">未 未收到</span>
+        <span class="mini s-to_correct">订 待订正</span>
+        <span class="mini s-to_return">回 待交回</span>
+        <span class="mini s-to_grade">批 待批改</span>
+      </div>
+      <div class="student-grid" id="markGrid"></div>
+      <div class="actionbar" id="markActions"></div>
+    </div>
+
+    <div class="card">
+      <h2>最近任务（点“继续标记”回到登记面板）</h2>
+      <div class="recent" id="recentTasks"></div>
+    </div>
+  </section>
+
+  <section class="view" id="view-board">
+    <div class="card filters">
+      <div class="filter-row">
+        <label>作业册<select id="filterBook"></select></label>
+        <label>课次<select id="filterLesson"></select></label>
+        <label>状态<select id="filterStatus"></select></label>
+      </div>
+      <div class="filter-row">
+        <label class="switch"><input type="checkbox" id="showDone" /> 显示已完成任务</label>
+        <label class="switch"><input type="checkbox" id="showArchived" /> 显示已归档</label>
+        <button id="btnRefresh" class="btn small" type="button">立即刷新</button>
+        <span class="muted" id="boardUpdated"></span>
+      </div>
+      <div class="legend" id="boardLegend"></div>
+    </div>
+    <div class="board-list" id="boardList"></div>
+  </section>
+
+  <section class="view" id="view-detail">
+    <div class="card">
+      <div class="row between">
+        <button id="btnDetailBack" class="btn small ghost" type="button">← 返回看板</button>
+        <button id="btnDetailArchive" class="btn small" type="button">归档任务</button>
+      </div>
+      <h2 id="detailTitle">—</h2>
+      <p class="hint" id="detailMeta"></p>
+      <div class="legend" id="detailCounts"></div>
+      <div class="filter-row">
+        <label>只看状态<select id="detailStatusFilter"></select></label>
+        <button id="btnDetailHistory" class="btn small" type="button">显示状态历史</button>
+      </div>
+      <div class="mark-toolbar">
+        <button id="btnDetailSelectAll" class="btn small" type="button">全选未完成</button>
+        <button id="btnDetailClear" class="btn small" type="button">清空选择</button>
+        <span class="sel-count" id="detailSelCount">已选 0 人</span>
+      </div>
+      <div class="actionbar" id="detailActions"></div>
+      <div id="detailList" class="detail-list"></div>
+      <div id="detailHistory" class="history" hidden></div>
+    </div>
+  </section>
+
+  <section class="view" id="view-roster">
+    <div class="card">
+      <h2>班级名单</h2>
+      <p class="hint">学号自动生成，可只填写学号（姓名可选）。默认 38 人，可随时修改；修改人数只会补充缺少的学号，不会删除已有任务记录。</p>
+      <div class="filter-row">
+        <label>班级人数<input id="classSize" class="input narrow" type="number" min="1" max="120" /></label>
+        <button id="btnSaveClassSize" class="btn small primary" type="button">保存并生成学号</button>
+      </div>
+      <div class="filter-row">
+        <input id="newStudentNo" class="input narrow" type="text" placeholder="新增学号，如 39" />
+        <input id="newStudentName" class="input" type="text" placeholder="姓名（可留空）" />
+        <button id="btnAddStudent" class="btn small" type="button">新增学生</button>
+      </div>
+      <div id="rosterList" class="roster-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>数据与重置</h2>
+      <p class="hint" id="rosterInfo"></p>
+      <button id="btnResetData" class="btn small danger" type="button">清空所有任务与历史（保留名单）</button>
+    </div>
+
+    <div class="card">
+      <h2>使用说明</h2>
+      <ul class="help">
+        <li>手机和电脑打开同一个地址，数据保存在服务器上的 SQLite 数据库里，改完自动同步（另一台设备几秒内自动刷新）。</li>
+        <li>状态含义：<b>未收到</b> = 一开始就没交；<b>待订正</b> = 已批改但要订正；<b>待交回</b> = 退回后还没交回来；<b>待批改</b> = 已交回等我检查；<b>已完成</b> = 我已确认通过。</li>
+        <li>只有老师点“检查通过”才会变成已完成；开启新课次、过了一天都不会自动完成旧任务。</li>
+        <li>旧课次未完成的学生会一直留在待办看板上，并显示已持续未完成的天数。</li>
+        <li>每次状态变化都会写入历史记录，可在任务详情里查看。</li>
+        <li>看板只显示学号、不显示姓名（姓名只在任务详情里出现），投影时不会公开学生姓名。</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast" hidden></div>
+<div id="overlay" class="overlay" hidden>
+  <div class="sheet" id="sheet">
+    <div class="sheet-head">
+      <strong id="sheetTitle">更新状态</strong>
+      <button id="sheetClose" class="btn small ghost" type="button">关闭</button>
+    </div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

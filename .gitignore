@@ -1,0 +1,16 @@
+# 运行时数据库（内含演示/学生数据，不要提交）
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# 脚本草稿与临时文件
+work/
+
+# 日志
+*.log
+
+# 操作系统文件
+Thumbs.db
+Desktop.ini
+.DS_Store
