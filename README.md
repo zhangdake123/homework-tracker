@@ -122,21 +122,33 @@ WantedBy=multi-user.target
 
 **方案 C：已有服务器/内网穿透**：把 `node server.js` 挂在你熟悉的方式（pm2、screen、Docker）后面即可，唯一要求是手机和电脑都能访问同一个地址。
 
-**方案 D：部署到 GitHub 登录的免费云平台（Render / Railway / Koyeb / Zeabur 等）**
+**方案 D：部署到 Vercel（本项目已实测部署成功，免费、支持 GitHub 登录）**
 
-以 **Render** 为例（免费、支持 GitHub 登录）：
+线上地址：`https://homework-tracker.vercel.app`（Vercel 项目名 `homework-tracker`）。实测配置如下：
 
-1. 在 Render 里 **New → Blueprint**（或 **New → Web Service**），用 GitHub 登录后选仓库 `homework-tracker`。
-2. Render 会自动读取仓库里的 `render.yaml`；手动配置时填：Runtime = **Node**，Build Command = `npm install`，Start Command = `node server.js`，Plan = **Free**。
-3. 环境变量：`NODE_VERSION=24.15.0`、`HOST=0.0.0.0`。端口不用填，Render 会自动注入 `PORT`（代码已读取）。
-4. 部署完成后拿到一个 `https://xxx.onrender.com` 地址，手机和电脑都打开它即可，数据是同一份。
+1. 仓库里的 `vercel.json` 把 `server.js` 声明为 Node 服务入口 —— 不写就会报 `must specify an "entrypoint" for runtime "node"`：
 
-⚠️ **必须先知道的两件事**
+```json
+{
+  "services": {
+    "homework-tracker": {
+      "root": ".",
+      "entrypoint": "server.js",
+      "buildCommand": "npm install"
+    }
+  },
+  "rewrites": [{ "source": "/(.*)", "destination": { "type": "service", "service": "homework-tracker" } }]
+}
+```
 
-- **免费实例的磁盘是临时的**：重新部署、服务重启（免费实例闲置 15 分钟会被回收，下次访问冷启动约 50 秒）都会清空 `data/`，作业记录会丢。要长期用，必须：给实例挂**持久盘**（多数平台需要付费计划）并把 `DB_PATH` 指向盘内路径（例如 `DB_PATH=/var/data/tracker.db`），或者改用方案 A/B。
-- 部署前请把 Node 版本提到 **22.13+**（`render.yaml` 里已写 `NODE_VERSION=24.15.0`），否则启动会报 `ERR_UNKNOWN_BUILTIN_MODULE: node:sqlite`。
+2. 环境变量（**必须**）：`NODE_VERSION=24`、`DB_PATH=/tmp/tracker.db`。Vercel 函数文件系统只读，只有 `/tmp` 可写；不设 `DB_PATH` 会在启动时报 `EROFS: read-only file system`。
+3. 部署：`vercel link --yes` → `vercel env add DB_PATH production` → `vercel deploy --prod`；或在 Vercel 网站 Import Git Repository，之后 `git push` 自动部署。
+4. 打开 `https://<项目名>.vercel.app`，手机和电脑共用同一份数据；SSE（`/api/events`）实测能正常建立连接，另有 15 秒轮询兜底。
 
-重启后想恢复演示数据：在平台的控制台里跑 `npm run seed:demo`；恢复自己的数据见第五节。
+⚠️ **致命限制（已实测，务必看）**：Vercel 函数的 `/tmp` 是**临时的，且不跨实例共享**。实测：往 GitHub 推一次代码触发重新部署后，刚创建的作业任务和 40 条状态历史**全部消失**（`tasks=0`、`history=0`，只有学号名单会被重新生成）。因此：
+
+- **Vercel 免费版只能当演示/预览**，不要录入真实作业记录；
+- 要长期使用，必须把数据库换成外部持久存储（如 Turso 的 serverless SQLite、Neon 的 Postgres），这需要把 `src/db.js` 改成异步访问（代码改造，不是改配置），或改用方案 A / B。
 
 ---
 
@@ -209,6 +221,8 @@ Copy-Item .\data\tracker.db* "D:\backup\hw-$(Get-Date -Format yyyyMMdd-HHmm)\" -
 - 真实学生信息导入（Excel/CSV 导入）、姓名批量编辑（目前可逐个填写姓名）。
 - 状态变化时间线的高级统计报表（数据都在 `history` 表里，将来可以加）。
 - 离线可用（PWA 缓存）：断网时页面无法打开。
+- 云端外部数据库：目前只有本地 SQLite 文件。Vercel 免费版函数文件系统是只读 + 临时 `/tmp`，**重启/重新部署数据必丢**（已实测），要长期云端使用需接 Turso / Neon 等外部库并改造 `src/db.js` 为异步。
+- 云端一键导出/导入整库备份（本地可用第五节的文件复制或 `VACUUM INTO`）。
 
 ---
 
