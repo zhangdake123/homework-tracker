@@ -124,7 +124,9 @@ WantedBy=multi-user.target
 
 **方案 D：部署到 Vercel（本项目已实测部署成功，免费、支持 GitHub 登录）**
 
-线上地址：`https://homework-tracker.vercel.app`（Vercel 项目名 `homework-tracker`）。实测配置如下：
+线上地址：**`https://homework-tracker-c-s3.vercel.app`**（Vercel 项目名 `homework-tracker`，团队 `c-s3`）。
+
+> ⚠️ 注意：不带后缀的 `homework-tracker.vercel.app` 属于**别人的 Vercel 账号**（打开会是一个无关的 React 页面），不要用那个地址。
 
 1. 仓库里的 `vercel.json` 把 `server.js` 声明为 Node 服务入口 —— 不写就会报 `must specify an "entrypoint" for runtime "node"`：
 
@@ -144,6 +146,10 @@ WantedBy=multi-user.target
 2. 环境变量（**必须**）：`NODE_VERSION=24`、`DB_PATH=/tmp/tracker.db`。Vercel 函数文件系统只读，只有 `/tmp` 可写；不设 `DB_PATH` 会在启动时报 `EROFS: read-only file system`。
 3. 部署：`vercel link --yes` → `vercel env add DB_PATH production` → `vercel deploy --prod`；或在 Vercel 网站 Import Git Repository，之后 `git push` 自动部署。
 4. 打开 `https://<项目名>.vercel.app`，手机和电脑共用同一份数据；SSE（`/api/events`）实测能正常建立连接，另有 15 秒轮询兜底。
+
+5. **必须关闭部署保护**，否则域名会返回 Vercel 登录页（手机没登录 Vercel 就打不开）：`vercel project protection disable homework-tracker --sso`。本项目已执行该项。
+
+6. 本项目实测可用的生产域名（三个都指向同一个部署）：`https://homework-tracker-c-s3.vercel.app`（推荐，最短）、`https://mvp-ai-1-a-b-c-2.vercel.app`、`https://homework-tracker-git-main-c-s3.vercel.app`。
 
 ⚠️ **致命限制（已实测，务必看）**：Vercel 函数的 `/tmp` 是**临时的，且不跨实例共享**。实测：往 GitHub 推一次代码触发重新部署后，刚创建的作业任务和 40 条状态历史**全部消失**（`tasks=0`、`history=0`，只有学号名单会被重新生成）。因此：
 
