@@ -11,6 +11,7 @@
     "start": "node server.js",
     "seed:demo": "node scripts/seed-demo.js",
     "seed:reset": "node scripts/seed-demo.js --reset",
-    "test": "node tests/scenarios.test.js"
+    "test": "node tests/scenarios.test.js",
+    "backup": "node scripts/backup-db.js"
   }
 }

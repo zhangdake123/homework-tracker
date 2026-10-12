@@ -94,31 +94,35 @@ node scripts/seed-demo.js --reset    # 先清空任务再生成演示数据
 - 做成开机自启动（可选）：Win + R 输入 `shell:startup`，放一个快捷方式，目标填
   `powershell -WindowStyle Hidden -Command "cd '项目目录'; node server.js"`。
 
-**方案 B：部署到云服务器（手机在 4G 下也能用）**
+**方案 B：部署到云服务器（推荐腾讯云；手机在 4G 下也能用，数据存在服务器磁盘上，不会丢）**
 
-1. 准备一台 Linux 服务器，安装 Node.js ≥ 22：`apt install nodejs`（或从 nodejs.org 下载）。
-2. 上传项目目录，直接用 `PORT=80 node server.js` 试运行（80 端口通常需要 root 或 `setcap`）。
-3. 用 systemd 常驻（`/etc/systemd/system/hw-tracker.service`）：
+项目自带一键部署脚本 `scripts/deploy-linux.sh`，适用于 Ubuntu 22.04+ / Debian 12+，已实测通过。
 
-```
-[Unit]
-Description=Homework Tracker
-After=network.target
+1. 在腾讯云买一台**轻量应用服务器**（或 CVM），系统选 **Ubuntu 22.04 / 24.04**。
+2. 在控制台的**防火墙 / 安全组**里放行你要用的端口（例如 `3000`）。用 `IP:端口` 访问**不需要 ICP 备案**；只有绑域名走 80/443 才需要备案。
+3. 用 root 登录服务器，执行：
 
-[Service]
-WorkingDirectory=/opt/hw-tracker
-ExecStart=/usr/bin/node server.js
-Environment=PORT=3000
-Environment=HOST=0.0.0.0
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
+```bash
+curl -fsSL https://raw.githubusercontent.com/zhangdake123/homework-tracker/main/scripts/deploy-linux.sh -o deploy.sh
+sudo bash deploy.sh
 ```
 
-  然后 `systemctl daemon-reload && systemctl enable --now hw-tracker`。
-4. 用 Nginx/Caddy 反向代理并配置 HTTPS（**注意**：SSE 需要 `proxy_buffering off;`，`app.js` 里已经有 15 秒轮询兜底，即使 SSE 被中间层切断也能同步）。
-5. 需要账号保护时，在反向代理层加 Basic Auth 即可（本 MVP 不含登录模块，见“未实现”）。
+   脚本会自动完成：安装 Node.js 24（22.5–22.12 的 `node:sqlite` 要加 `--experimental-sqlite` 标志，所以脚本统一装 24）→ 拉代码到 `/opt/hw-tracker` → 写 systemd 服务（开机自启、崩溃自动重启）→ 起服务 → 装每天 21:00 的自动备份 → 自检接口。
+   如果服务器拉 GitHub 慢，可以先把本项目目录传到服务器，再执行 `sudo bash scripts/deploy-linux.sh`（脚本会自动识别本地代码并复制过去）。
+4. 脚本结束会打印 `http://<公网IP>:3000`，手机和电脑都打开它即可，共用同一份数据。
+5. 要换端口：改 `/etc/systemd/system/hw-tracker.service` 里的 `Environment=PORT=`，然后 `systemctl daemon-reload && systemctl restart hw-tracker`。
+6. 想用域名 + HTTPS：在 3 的基础上加 Nginx/Caddy 反向代理（**SSE 需要 `proxy_buffering off;`**；另外 `app.js` 有 15 秒轮询兜底，SSE 被切断也能同步）。需要账号保护时在反向代理层加 Basic Auth（本 MVP 不含登录模块）。
+
+常用运维命令：
+
+```bash
+journalctl -u hw-tracker -f                                    # 实时日志
+systemctl restart hw-tracker                                   # 重启服务
+cd /opt/hw-tracker && git pull && systemctl restart hw-tracker  # 更新到最新代码
+bash scripts/backup-db.sh                                      # 手动备份一次
+```
+
+**自动备份**：脚本会写入 `/etc/cron.d/hw-tracker-backup`，每天 21:00 用 SQLite 的 `VACUUM INTO` 热备一份到 `/opt/hw-tracker/data/backups/`，自动保留最近 14 份。恢复方式：停服务后把备份文件复制成 `data/tracker.db`，再启动服务。
 
 **方案 C：已有服务器/内网穿透**：把 `node server.js` 挂在你熟悉的方式（pm2、screen、Docker）后面即可，唯一要求是手机和电脑都能访问同一个地址。
 
@@ -171,6 +175,7 @@ Copy-Item .\data\tracker.db* "D:\backup\hw-$(Get-Date -Format yyyyMMdd-HHmm)\" -
 
 - 恢复：把备份文件复制回 `data/` 覆盖，再启动服务。
 - 也可以用 SQLite 在线备份：`node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync('data/tracker.db').exec(\"VACUUM INTO 'data/backup.db'\")"`。
+- 部署在服务器上时（方案 B）：脚本已装好每天 21:00 的自动备份，文件在 `/opt/hw-tracker/data/backups/`，也可随时手动执行 `bash scripts/backup-db.sh`。
 - 数据全部在服务器上，**不在浏览器 localStorage 里**；手机和电脑只是显示同一份数据，清空浏览器缓存不会丢数据。
 - ⚠️ **免费云平台的磁盘是临时的**：实例重启或重新部署会清空 `data/`，所以免费平台只适合试用。要长期保存，请挂持久盘（并设置 `DB_PATH`）、换成自有服务器（方案 B），或直接用教室电脑（方案 A）+ 定期备份。
 
