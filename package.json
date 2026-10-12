@@ -2,16 +2,21 @@
   "name": "homework-tracker",
   "version": "1.0.0",
   "private": true,
-  "description": "班主任作业追踪 - 练习册作业完成情况追踪 MVP（零依赖，使用 Node 内置 SQLite）",
+  "description": "班主任作业追踪 - 练习册作业完成情况追踪 MVP（本机服务器版用 Node 内置 SQLite；静态托管版用腾讯云开发数据库）",
   "main": "server.js",
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
     "start": "node server.js",
+    "test": "node tests/run-all.js",
+    "test:server": "node tests/scenarios.test.js",
+    "test:static": "node tests/static-store.test.js",
+    "test:cloudbase": "node tests/cloudbase-driver.test.js",
+    "test:boot": "node tests/static-boot.test.js",
+    "build:static": "node scripts/build-static-zip.js",
     "seed:demo": "node scripts/seed-demo.js",
     "seed:reset": "node scripts/seed-demo.js --reset",
-    "test": "node tests/scenarios.test.js",
     "backup": "node scripts/backup-db.js"
   }
 }

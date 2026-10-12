@@ -58,7 +58,11 @@ function fmtClock(iso) {
   return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
 }
 
+let backend = null;
+let backendError = null;
+
 async function api(path, method, body) {
+  if (backend) return backend.request(path, method, body);
   const options = { method: method || 'GET', headers: { 'Content-Type': 'application/json' } };
   if (body !== undefined && body !== null) options.body = JSON.stringify(body);
   const res = await fetch(path, options);
@@ -86,8 +90,8 @@ async function refresh(options) {
     setSync('已同步 ' + fmtClock(), 'ok');
     renderAll(opts);
   } catch (err) {
-    setSync('连接失败', 'warn');
-    if (!opts.silent) showToast('无法连接服务器：' + err.message);
+    setSync(backend ? '云开发读取失败' : '连接失败', 'warn');
+    if (!opts.silent) showToast(connectionFailText() + (err && err.message ? err.message : String(err)));
   }
 }
 
@@ -122,7 +126,8 @@ function renderAll(options) {
   renderBoard();
   renderDetail();
   if (!opts.skipRoster) renderRoster();
-  $('rosterInfo').textContent = '当前名单 ' + state.students.length + ' 人，任务 ' + state.tasks.length + ' 个。数据保存在服务器的 SQLite 文件里，手机和电脑读取同一份数据。';
+  renderCloudCard();
+  $('rosterInfo').textContent = '当前名单 ' + state.students.length + ' 人，任务 ' + state.tasks.length + ' 个。' + dataLocationText();
 }
 
 function statusCountChips(counts) {
@@ -636,6 +641,10 @@ function handleAction(action, el) {
 }
 
 const idHandlers = {
+  btnCloudConnect: () => connectCloud(),
+  btnCloudLocal: () => useLocalServer(),
+  btnExportData: () => exportBackup(),
+  btnDownloadCloudConfig: () => downloadCloudConfig(),
   btnCreateTask: () => createTask(),
   btnMarkClose: () => { state.mark.taskId = null; renderAll(); },
   btnSelectAll: () => {
@@ -736,6 +745,19 @@ function scheduleRefresh() {
 }
 
 function startSync() {
+  if (backend) {
+    setSync('连接云开发…');
+    if (typeof backend.subscribe === 'function') {
+      backend.subscribe({
+        onReady: (text) => setSync((text || '云开发实时同步已连接') + ' ' + fmtClock(), 'ok'),
+        onChange: () => { setSync('已同步 ' + fmtClock(), 'ok'); scheduleRefresh(); },
+        onWarn: (text) => setSync(text, 'warn'),
+      });
+    }
+    window.addEventListener('focus', () => refresh({ silent: true }));
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh({ silent: true }); });
+    return;
+  }
   setSync('连接中…');
   try {
     const source = new EventSource('/api/events');
@@ -751,14 +773,138 @@ function startSync() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh({ silent: true }); });
 }
 
-function init() {
+function isLocalPage() {
+  const host = String(location.hostname || '');
+  if (!host || host === 'localhost' || host === '127.0.0.1' || host === '::1') return true;
+  if (/^192\.168\./.test(host) || /^10\./.test(host) || /^172\.(1[6-9]|2[0-9]|3[01])\./.test(host)) return true;
+  return false;
+}
+
+function dataSourceName() {
+  if (backend) return '腾讯云开发数据库（静态托管）';
+  if (isLocalPage()) return '本机 / 局域网服务器（SQLite）';
+  return '未配置数据源（静态网页需要填写云开发环境 ID）';
+}
+
+function dataLocationText() {
+  if (backend) return '数据保存在腾讯云开发数据库里，手机和电脑读取同一份数据。';
+  return '数据保存在服务器的 SQLite 文件里（data/tracker.db），手机和电脑读取同一份数据。';
+}
+
+function connectionFailText() {
+  if (backend) return '读取云开发数据失败：';
+  if (!isLocalPage()) return '这个静态网页还没有配置数据源，请到「名单 / 设置」填写云开发环境 ID。错误信息：';
+  return '无法连接服务器：';
+}
+
+function renderCloudCard() {
+  const envInput = $('cloudEnv');
+  const stateEl = $('cloudState');
+  if (!envInput || !stateEl) return;
+  const info = window.HomeworkCloud || {};
+  if (backend) {
+    const sourceText = info.configSource === 'local' ? '（本机填写的设置）' : (info.configSource === 'file' ? '（来自网站上的 cloudbase-config.js）' : (info.configSource === 'url' ? '（来自网址参数）' : ''));
+    stateEl.innerHTML = '当前数据源：<b>' + esc(backend.label || '云开发数据库') + '</b>（环境 ' + esc(info.env || '') + '）' + esc(sourceText) +
+      (info.message ? '。' + esc(info.message) : '');
+    envInput.value = info.env || '';
+    return;
+  }
+  if (backendError) {
+    stateEl.innerHTML = '当前数据源：<b>未连接</b>。' + esc(backendError.message || String(backendError));
+    envInput.value = info.env || '';
+    return;
+  }
+  stateEl.innerHTML = '当前数据源：<b>' + esc(dataSourceName()) + '</b>' + (info.message ? '。' + esc(info.message) : '');
+  envInput.value = '';
+}
+
+async function resolveBackend() {
+  if (!window.HomeworkBackendReady) {
+    await new Promise((resolve) => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      if (document.readyState === 'complete') { finish(); return; }
+      window.addEventListener('load', finish, { once: true });
+      setTimeout(finish, 3000);
+    });
+  }
+  if (!window.HomeworkBackendReady) return;
+  try {
+    backend = (await window.HomeworkBackendReady) || null;
+  } catch (err) {
+    backend = null;
+    backendError = err;
+  }
+}
+
+function connectCloud() {
+  const env = String($('cloudEnv').value || '').trim();
+  if (!env) { showToast('请先填写云开发环境 ID（在云开发平台 → 环境总览里复制）'); return; }
+  if (!window.HomeworkCloud || typeof window.HomeworkCloud.save !== 'function') { showToast('页面还在加载，请等一秒再点'); return; }
+  window.HomeworkCloud.save(env, 'ap-shanghai');
+  showToast('已保存环境 ID，正在重新加载…');
+  setTimeout(() => location.reload(), 600);
+}
+
+function useLocalServer() {
+  if (!window.HomeworkCloud || typeof window.HomeworkCloud.clear !== 'function') return;
+  const info = window.HomeworkCloud || {};
+  const fileHint = info.fileEnv ? '注意：这个网站里放了 cloudbase-config.js（环境 ' + info.fileEnv + '），清掉本机设置后它仍然会连接云开发。' : '';
+  if (backend && !confirm('改回本机服务器后，这个网页会去连接本机地址；云端数据不会被删除。' + fileHint + '继续？')) return;
+  window.HomeworkCloud.clear();
+  showToast('已改回本机服务器模式，正在重新加载…');
+  setTimeout(() => location.reload(), 600);
+}
+
+function downloadTextFile(filename, text, mime) {
+  const blob = new Blob([text], { type: mime || 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+async function exportBackup() {
+  try {
+    if (!backend || typeof backend.exportAll !== 'function') {
+      showToast('当前是本机服务器模式，备份直接复制服务器的 data/tracker.db 即可');
+      return;
+    }
+    const data = await backend.exportAll();
+    downloadTextFile('作业追踪备份-' + new Date().toISOString().slice(0, 10) + '.json', JSON.stringify(data, null, 2), 'application/json');
+    showToast('备份已下载（' + (data.tasks || []).length + ' 个任务，' + (data.students || []).length + ' 名学生）');
+  } catch (err) {
+    showToast('备份失败：' + (err && err.message ? err.message : String(err)));
+  }
+}
+
+function downloadCloudConfig() {
+  const info = window.HomeworkCloud || {};
+  if (!info.env) { showToast('还没有填写云开发环境 ID'); return; }
+  if (typeof info.configFileText !== 'function') { showToast('页面还在加载，请等一秒再点'); return; }
+  downloadTextFile('cloudbase-config.js', info.configFileText(info.env, info.region), 'text/javascript');
+  showToast('已下载 cloudbase-config.js：上传到网站根目录后，手机打开网页就不用再填环境 ID 了');
+}
+
+async function init() {
   const now = new Date();
   const p = (n) => String(n).padStart(2, '0');
   $('taskDate').value = now.getFullYear() + '-' + p(now.getMonth() + 1) + '-' + p(now.getDate());
   state.view = 'register';
   renderAll();
   renderForm();
+  await resolveBackend();
+  renderCloudCard();
   startSync();
+  if (backendError) {
+    setSync('云开发未连接', 'warn');
+    showToast('云开发连接失败：' + (backendError.message || String(backendError)));
+    return;
+  }
   refresh({ silent: true });
 }
 

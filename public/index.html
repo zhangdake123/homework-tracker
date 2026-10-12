@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#1f6feb" />
 <title>班主任作业追踪</title>
-<link rel="stylesheet" href="/styles.css" />
+<link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 <header class="topbar">
@@ -146,6 +146,21 @@
       <div id="rosterList" class="roster-list"></div>
     </div>
 
+    <div class="card" id="cloudCard">
+      <h2>数据存放方式</h2>
+      <p class="hint" id="cloudState">检查中…</p>
+      <div class="filter-row">
+        <label>云开发环境 ID<input id="cloudEnv" class="input" type="text" autocomplete="off" placeholder="形如 my-env-1a2b3c4d" /></label>
+      </div>
+      <div class="filter-row">
+        <button id="btnCloudConnect" class="btn small primary" type="button">连接云开发数据库</button>
+        <button id="btnCloudLocal" class="btn small ghost" type="button">改回本机服务器</button>
+        <button id="btnExportData" class="btn small" type="button">导出数据备份（JSON）</button>
+        <button id="btnDownloadCloudConfig" class="btn small ghost" type="button">下载 cloudbase-config.js</button>
+      </div>
+      <p class="hint" id="cloudHelp">判断方法：地址是 http://localhost:3000 这类本机地址时用「本机服务器」；是 https 云端网址时填云开发环境 ID。填写后网页会重新加载。</p>
+    </div>
+
     <div class="card">
       <h2>数据与重置</h2>
       <p class="hint" id="rosterInfo"></p>
@@ -155,7 +170,7 @@
     <div class="card">
       <h2>使用说明</h2>
       <ul class="help">
-        <li>手机和电脑打开同一个地址，数据保存在服务器上的 SQLite 数据库里，改完自动同步（另一台设备几秒内自动刷新）。</li>
+        <li>手机和电脑打开同一个地址就能共享数据：本机服务器版存在 data/tracker.db（SQLite），静态托管版存在腾讯云开发数据库，改完自动同步。</li>
         <li>状态含义：<b>未收到</b> = 一开始就没交；<b>待订正</b> = 已批改但要订正；<b>待交回</b> = 退回后还没交回来；<b>待批改</b> = 已交回等我检查；<b>已完成</b> = 我已确认通过。</li>
         <li>只有老师点“检查通过”才会变成已完成；开启新课次、过了一天都不会自动完成旧任务。</li>
         <li>旧课次未完成的学生会一直留在待办看板上，并显示已持续未完成的天数。</li>
@@ -177,6 +192,8 @@
   </div>
 </div>
 
-<script src="/app.js"></script>
+<script src="store-core.js"></script>
+<script src="store-cloudbase.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
