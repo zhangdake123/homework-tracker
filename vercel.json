@@ -1,0 +1,18 @@
+{
+  "services": {
+    "homework-tracker": {
+      "root": ".",
+      "entrypoint": "server.js",
+      "buildCommand": "npm install"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "homework-tracker"
+      }
+    }
+  ]
+}

@@ -14,3 +14,7 @@ work/
 Thumbs.db
 Desktop.ini
 .DS_Store
+# Vercel 本地链接信息
+.vercel/
+.vercel
+.env*
